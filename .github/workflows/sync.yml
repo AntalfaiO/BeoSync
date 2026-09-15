@@ -1,0 +1,42 @@
+name: Beosztas Naptar Szinkronizalasa
+
+on:
+  schedule:
+    # Naponta 04:00, 10:00 és 16:00 UTC kor fut le
+    - cron: '0 4,10,16 * * *'
+  workflow_dispatch: # Kézzel is elindítható gombnyomásra
+
+jobs:
+  build-and-sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Kód letöltése
+        uses: actions/checkout@v4
+
+      - name: Python környezet beállítása
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Függőségek telepítése
+        run: |
+          python -m pip install --upgrade pip
+          pip install beautifulsoup4 ics playwright
+          playwright install chromium
+          playwright install-deps
+
+      - name: Kód futtatása
+        env:
+          MY_EMAIL: ${{ secrets.MY_EMAIL }}
+          MY_PASSWORD: ${{ secrets.MY_PASSWORD }}
+        run: python main.py
+
+      - name: ICS fájl frissítése
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add beosztasom.ics
+          git commit -m "Auto: beosztasom.ics frissitve" || exit 0
+          git push
