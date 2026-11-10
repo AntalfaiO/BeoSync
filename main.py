@@ -3,6 +3,7 @@ import re
 import sys
 import warnings
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 warnings.filterwarnings("ignore")
 
@@ -16,15 +17,16 @@ PASSWORD = os.environ.get("MY_PASSWORD")
 LOGIN_URL = "https://wi.kmarcell.com/index.php?i=1"
 SCHEDULE_URL = "https://wi.kmarcell.com/beosztasom.php"
 
-TIMEZONE_OFFSET = "+02:00"
+# A nyári/téli időszámítást a zóna automatikusan kezeli
+TIMEZONE = ZoneInfo("Europe/Budapest")
 OUTPUT_FILENAME = "beosztasom.ics"
 
 
 def run_sync():
-    print("🤖 Automatizált felhős folyamat indítása...")
+    print("BeoSync futtatása...")
 
     if not EMAIL or not PASSWORD:
-        print("❌ Hiba: Nem találhatók a bejelentkezési adatok a környezeti változókban.")
+        print("Hiba: Nem találhatók a bejelentkezési adatok a környezeti változókban.")
         sys.exit(1)
 
     with sync_playwright() as p:
@@ -36,7 +38,7 @@ def run_sync():
         page.set_default_timeout(20000)
 
         try:
-            print("🔑 Bejelentkezés...")
+            print("Bejelentkezés...")
             page.goto(LOGIN_URL, wait_until="domcontentloaded")
             page.wait_for_selector("input", timeout=10000)
 
@@ -49,7 +51,7 @@ def run_sync():
             with page.expect_navigation(wait_until="domcontentloaded", timeout=15000):
                 password_field.press("Enter")
 
-            print("📅 Beosztási oldal megnyitása...")
+            print("📅 Webinfo megnyitása...")
             page.goto(SCHEDULE_URL, wait_until="domcontentloaded")
             page.wait_for_selector("div#content-in center table", timeout=10000)
 
@@ -57,7 +59,7 @@ def run_sync():
             browser.close()
 
         except Exception as e:
-            print(f"❌ Hiba történt a letöltéskor: {e}")
+            print(f"Hiba történt a letöltéskor: {e}")
             browser.close()
             sys.exit(1)
 
@@ -65,7 +67,7 @@ def run_sync():
     table = soup.select_one("div#content-in center table") or soup.find("table")
 
     if not table:
-        print("❌ Hiba: Nem található táblázat.")
+        print("Hiba: Nem található táblázat.")
         sys.exit(1)
 
     calendar = Calendar()
@@ -102,14 +104,14 @@ def run_sync():
             end_time = match[1].zfill(5)
 
             if current_date_str:
-                start_iso = f"{current_date_str}T{start_time}:00{TIMEZONE_OFFSET}"
-                end_iso = f"{current_date_str}T{end_time}:00{TIMEZONE_OFFSET}"
+                start_dt = datetime.strptime(f"{current_date_str} {start_time}", "%Y-%m-%d %H:%M").replace(tzinfo=TIMEZONE)
+                end_dt = datetime.strptime(f"{current_date_str} {end_time}", "%Y-%m-%d %H:%M").replace(tzinfo=TIMEZONE)
 
                 try:
                     event = Event()
                     event.name = f"Műszak: {group_text}" if group_text and group_text != "-" else "Beosztás"
-                    event.begin = start_iso
-                    event.end = end_iso
+                    event.begin = start_dt
+                    event.end = end_dt
                     calendar.events.add(event)
 
                     added_events += 1
@@ -119,7 +121,7 @@ def run_sync():
     with open(OUTPUT_FILENAME, "w", encoding="utf-8") as f:
         f.writelines(calendar.serialize_iter())
 
-    print(f"✨ Mentve: {OUTPUT_FILENAME} ({added_events} műszak)")
+    print(f"Mentve: {OUTPUT_FILENAME} ({added_events} műszak)")
 
 
 if __name__ == "__main__":
