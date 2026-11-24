@@ -127,6 +127,11 @@ def run_sync():
                 except Exception:
                     continue
 
+    if added_events == 0:
+        # Ne írjuk felül a meglévő naptárat üres eredménnyel
+        print("Hiba: egyetlen műszak sem olvasható ki, a naptárfájl nem változik.")
+        sys.exit(1)
+
     with open(OUTPUT_FILENAME, "w", encoding="utf-8") as f:
         f.writelines(calendar.serialize_iter())
 
