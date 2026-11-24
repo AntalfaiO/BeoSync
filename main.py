@@ -16,11 +16,13 @@ PASSWORD = os.environ.get("MY_PASSWORD")
 
 BASE_URL = "https://webinfo.melodepo.hu"
 LOGIN_URL = f"{BASE_URL}/"
-SCHEDULE_URL = f"{BASE_URL}/beosztasom.php"
+SCHEDULE_URL = f"{BASE_URL}/beosztasom"
 
 # A nyári/téli időszámítást a zóna automatikusan kezeli
 TIMEZONE = ZoneInfo("Europe/Budapest")
 OUTPUT_FILENAME = "beosztasom.ics"
+# A havi beosztás táblázata (az oldal tetején van egy másik, "topinfo" táblázat is)
+TABLE_SELECTOR = "table.havibeo"
 
 
 def run_sync():
@@ -57,12 +59,7 @@ def run_sync():
 
             print("📅 Webinfo megnyitása...")
             page.goto(SCHEDULE_URL, wait_until="domcontentloaded")
-            try:
-                page.wait_for_selector("div#content-in center table", timeout=10000)
-            except Exception:
-                # Ha változott az oldal szerkezete, bármilyen táblázatot elfogadunk
-                print(f"A régi táblázat nem található ({page.url}, \"{page.title()}\"), általános keresés...")
-                page.wait_for_selector("table", timeout=10000)
+            page.wait_for_selector(TABLE_SELECTOR, timeout=15000)
 
             html_content = page.content()
             browser.close()
@@ -73,7 +70,7 @@ def run_sync():
             sys.exit(1)
 
     soup = BeautifulSoup(html_content, "html.parser")
-    table = soup.select_one("div#content-in center table") or soup.find("table")
+    table = soup.select_one(TABLE_SELECTOR)
 
     if not table:
         print("Hiba: Nem található táblázat.")
