@@ -14,8 +14,9 @@ from playwright.sync_api import sync_playwright
 EMAIL = os.environ.get("MY_EMAIL")
 PASSWORD = os.environ.get("MY_PASSWORD")
 
-LOGIN_URL = "https://wi.kmarcell.com/index.php?i=1"
-SCHEDULE_URL = "https://wi.kmarcell.com/beosztasom.php"
+BASE_URL = "https://webinfo.melodepo.hu"
+LOGIN_URL = f"{BASE_URL}/"
+SCHEDULE_URL = f"{BASE_URL}/beosztasom.php"
 
 # A nyári/téli időszámítást a zóna automatikusan kezeli
 TIMEZONE = ZoneInfo("Europe/Budapest")
@@ -40,20 +41,28 @@ def run_sync():
         try:
             print("Bejelentkezés...")
             page.goto(LOGIN_URL, wait_until="domcontentloaded")
-            page.wait_for_selector("input", timeout=10000)
-
-            email_field = page.locator('input[type="text"], input[type="email"], input[name="user"], input[name="username"]').first
-            password_field = page.locator('input[type="password"]').first
+            # Az űrlap elején egy rejtett csrf mező van, ezért név szerint keressük a mezőket
+            email_field = page.locator("#emailcim")
+            password_field = page.locator("#password")
+            email_field.wait_for(state="visible", timeout=15000)
 
             email_field.fill(EMAIL)
             password_field.fill(PASSWORD)
 
             with page.expect_navigation(wait_until="domcontentloaded", timeout=15000):
-                password_field.press("Enter")
+                page.locator('input[type="submit"]').first.click()
+
+            if page.locator("#password").count() > 0:
+                raise RuntimeError("Sikertelen bejelentkezés (rossz e-mail/jelszó?)")
 
             print("📅 Webinfo megnyitása...")
             page.goto(SCHEDULE_URL, wait_until="domcontentloaded")
-            page.wait_for_selector("div#content-in center table", timeout=10000)
+            try:
+                page.wait_for_selector("div#content-in center table", timeout=10000)
+            except Exception:
+                # Ha változott az oldal szerkezete, bármilyen táblázatot elfogadunk
+                print(f"A régi táblázat nem található ({page.url}, \"{page.title()}\"), általános keresés...")
+                page.wait_for_selector("table", timeout=10000)
 
             html_content = page.content()
             browser.close()
